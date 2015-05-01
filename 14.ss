@@ -457,10 +457,34 @@
 	)
 )
 
-
-
-
-
+(define syntax-expand
+	(lambda (exp)
+	    (cases expression exp
+			[var-exp (id) exp]
+			[lit-exp (value) exp]
+			[app-exp (rator rands) exp]
+			[lambda-exp (ids bodies) exp]
+			[let-exp (vars bodies)
+				(app-exp (lambda-exp (map cadar vars) (map syntax-expand bodies)) (map syntax-expand (map cadr vars)))
+			]
+			[letrec-exp (vars bodies)
+				; TODO
+				exp
+			]
+			[let*-exp (vars bodies)
+				; TODO
+				exp
+			]
+			[named-let-exp (name vars bodies)
+				; TODO
+				exp
+			]
+			[if-exp (condition if-true if-false) exp]
+			[if-exp-void (condition if-true) exp]
+			[set-exp (id value) exp]
+		)
+	)
+)
 
 
 ;-------------------+
