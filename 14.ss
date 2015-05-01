@@ -213,6 +213,9 @@
                     (andmap (lambda (y)
                               (and (expression? (car y))
                                    (expression? (cadr y)))) x)))]
+        [begin-exp
+          (bodies (lambda (x)
+                     (andmap expression? x)))]
 )
 
 (define (parse-exp datum)
@@ -416,6 +419,8 @@
                                                 (eopl:error 'parse-exp "case conditions must take a value and an expression")))
                                             (cddr datum)))
                                      (eopl:error 'parse-exp "case must have a value and at least one condition"))]
+                                [(eqv? 'begin (car datum))
+                                 (begin-exp (map parse-exp (cdr datum)))]
                                 [else 
 					(app-exp 
 						(parse-exp (car datum))
@@ -571,6 +576,10 @@
                                     (if-exp (app-exp (var-exp 'eqv?) (list (syntax-expand (caar bodies)) (syntax-expand condition)))
                                             (syntax-expand (cadar bodies))
                                             (syntax-expand (case-exp condition (cdr bodies)))))]
+                        [begin-exp (bodies)
+                                   (if (null? bodies)
+                                     (lit-exp (void))
+                                     (app-exp (lambda-exp '() (map syntax-expand bodies)) '()))]
                                     
 
 		)
