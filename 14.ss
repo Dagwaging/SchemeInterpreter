@@ -413,7 +413,7 @@
                  (if (> (length datum) 1)
                    (cond-exp 
                      (map (lambda (x)
-                            (if (= (length datum) 2)
+                            (if (= (length x) 2)
                               (map parse-exp x)
                               (eopl:error 'parse-exp "cond conditions must take a condition and an expression")))
                           (cdr datum)))
@@ -531,14 +531,14 @@
 	    (cases expression exp
 			[var-exp (id) exp]
 			[lit-exp (value) exp]
-			[app-exp (rator rands) exp]
-			[lambda-exp (ids bodies) exp]
+			[app-exp (rator rands) (app-exp (syntax-expand rator) (map syntax-expand rands))]
+			[lambda-exp (ids bodies) (lambda-exp ids (map syntax-expand bodies))]
 			[let-exp (vars bodies)
 				(app-exp (lambda-exp (map cadar vars) (map syntax-expand bodies)) (map syntax-expand (map cadr vars)))
 			]
 			[letrec-exp (vars bodies)
 				; TODO
-				exp
+                                (letrec-exp (map syntax-expand vars) (map syntax-expand bodies))
 			]
 			[let*-exp (vars bodies)
 		        (if (null? vars)
@@ -547,17 +547,17 @@
 			]
 			[named-let-exp (name vars bodies)
 				; TODO
-				exp
+				(named-let-exp name (syntax-expand vars) (map syntax-expand bodies))
 			]
-			[if-exp (condition if-true if-false) exp]
-			[if-exp-void (condition if-true) exp]
-			[set-exp (id value) exp]
+			[if-exp (condition if-true if-false) (if-exp (syntax-expand condition) (syntax-expand if-true) (syntax-expand if-false))]
+			[if-exp-void (condition if-true) (if-exp-void (syntax-expand condition) (syntax-expand if-true))]
+			[set-exp (id value) (set-exp id (syntax-expand value))]
 			[or-exp (bodies)
 				(if (null? bodies)
 					(lit-exp #f)
 					(if (null? (cdr bodies))
 						(syntax-expand (car bodies))
-						(if-exp (syntax-expand (car bodies)) (car bodies) (syntax-expand (or-exp (cdr bodies))))
+						(if-exp (syntax-expand (car bodies)) (syntax-expand (car bodies)) (syntax-expand (or-exp (cdr bodies))))
 					)
 				)
 			]
@@ -566,12 +566,12 @@
 					(lit-exp #t)
 					(if (null? (cdr bodies))
 						(syntax-expand (car bodies))
-						(if-exp (syntax-expand (car bodies)) (syntax-expand (and-exp (cdr bodies))) (car bodies))
+						(if-exp (syntax-expand (car bodies)) (syntax-expand (and-exp (cdr bodies))) (syntax-expand (car bodies)))
 					)
 				)
 			]
 			[while-exp (condition bodies)
-			exp
+                                   (while-exp (syntax-expand condition) (map syntax-expand bodies))
 			; (display (map syntax-expand bodies))
 			; (newline)
 			; 	(list 'named-let-exp 'recurse '() (if-exp-void (syntax-expand condition) (begin-exp (map syntax-expand bodies))))
@@ -589,9 +589,15 @@
                       (if (null? (cdr bodies))
                         (if-exp-void (if (eqv? 'else (cadaar bodies))
                                        (lit-exp #t)
-                                       (app-exp (var-exp 'eqv?) (list (syntax-expand (caar bodies)) (syntax-expand condition))))
+                                       (app-exp (var-exp (if (list? (caar bodies))
+                                                           'member
+                                                           'eqv?))
+                                                (list (syntax-expand condition) (syntax-expand (caar bodies)))))
                                      (syntax-expand (cadar bodies)))
-                        (if-exp (app-exp (var-exp 'eqv?) (list (syntax-expand (caar bodies)) (syntax-expand condition)))
+                        (if-exp (app-exp (var-exp (if (list? (caar bodies))
+                                                           'member
+                                                           'eqv?))
+                                                (list (syntax-expand condition) (syntax-expand (caar bodies))))
                                 (syntax-expand (cadar bodies))
                                 (syntax-expand (case-exp condition (cdr bodies)))))]
             [begin-exp (bodies)
@@ -723,7 +729,7 @@
       [if-exp-void (condition if-true)
               (if (eval-exp condition env)
                 (eval-exp if-true env))]
-      [when-exp (condition bodies)
+      [while-exp (condition bodies)
       	(if (eval-exp condition env) 
       		(begin 
       			(eval-bodies bodies env) 
@@ -778,7 +784,7 @@
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
 
-(define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map eqv?))
+(define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map eqv? quotient))
 
 (define init-env         ; for now, our initial global environment only contains 
   (extend-env            ; procedure names.  Recall that an environment associates
@@ -906,6 +912,8 @@
                                  acc)))))]
       [(eqv?) (if (arg-number eqv? args 2)
                 (eqv? (1st args) (2nd args)))]
+      [(quotient) (if (arg-number quotient args 2)
+                    (quotient (1st args) (2nd args)))]
       [else (eopl:error 'apply-prim-proc 
             "Bad primitive procedure name: ~s" 
             prim-proc)])))
