@@ -465,21 +465,19 @@
 			[app-exp (rator rands) exp]
 			[lambda-exp (ids bodies) exp]
 			[let-exp (vars bodies)
-			; (display "LET-EXP\n")
-			; (display vars)
-			; (newline)
-			; (display bodies)
-			; (newline)
 				(app-exp (lambda-exp (map cadar vars) (map syntax-expand bodies)) (map syntax-expand (map cadr vars)))
 			]
 			[letrec-exp (vars bodies)
-				2
+				; TODO
+				exp
 			]
 			[let*-exp (vars bodies)
-				3
+				; TODO
+				exp
 			]
 			[named-let-exp (name vars bodies)
-				4
+				; TODO
+				exp
 			]
 			[if-exp (condition if-true if-false) exp]
 			[if-exp-void (condition if-true) exp]
