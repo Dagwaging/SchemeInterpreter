@@ -202,6 +202,11 @@
 			(andmap expression? x))
 		)
 	]
+        [cond-exp
+          (bodies (lambda (x)
+                    (andmap (lambda (y)
+                              (and (expression? (car y))
+                                   (expression? (cadr y)))) x)))]
 )
 
 (define (parse-exp datum)
@@ -386,6 +391,11 @@
 				[(eqv? 'or (car datum))
 					(or-exp (map parse-exp (cdr datum)))
 				]
+                                [(eqv? 'cond (car datum))
+                                 (cond-exp 
+                                   (map (lambda (x)
+                                          (map parse-exp x))
+                                        (cdr datum)))]
 				[else 
 					(app-exp 
 						(parse-exp (car datum))
@@ -523,6 +533,15 @@
 					)
 				)
 			]
+                        [cond-exp (bodies)
+                                  (if (null? (cdr bodies))
+                                    (if-exp-void (if (eqv? 'else (cadaar bodies))
+                                                   (lit-exp #t)
+                                                   (syntax-expand (caar bodies)))
+                                                 (syntax-expand (cadar bodies)))
+                                    (if-exp (syntax-expand (caar bodies))
+                                            (syntax-expand (cadar bodies))
+                                            (syntax-expand (cond-exp (cdr bodies)))))]
 		)
 	)
 )
