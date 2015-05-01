@@ -208,6 +208,20 @@
 			(andmap expression? x))
 		)
 	]
+    [cond-exp
+      (bodies (lambda (x)
+                (andmap (lambda (y)
+                          (and (expression? (car y))
+                               (expression? (cadr y)))) x)))]
+    [case-exp
+      (condition expression?)
+      (bodies (lambda (x)
+                (andmap (lambda (y)
+                          (and (expression? (car y))
+                               (expression? (cadr y)))) x)))]
+    [begin-exp
+      (bodies (lambda (x)
+                 (andmap expression? x)))]
 )
 
 (define (parse-exp datum)
@@ -395,6 +409,27 @@
 				[(eqv? 'while (car datum))
 					(while-exp (parse-exp (cadr datum)) (map parse-exp (cddr datum)))
 				]
+                [(eqv? 'cond (car datum))
+                 (if (> (length datum) 1)
+                   (cond-exp 
+                     (map (lambda (x)
+                            (if (= (length datum) 2)
+                              (map parse-exp x)
+                              (eopl:error 'parse-exp "cond conditions must take a condition and an expression")))
+                          (cdr datum)))
+                   (eopl:error 'parse-exp "cond must have at least one condition"))]
+                [(eqv? 'case (car datum))
+                   (if (> (length datum) 2)
+                     (case-exp
+                       (parse-exp (cadr datum))
+                       (map (lambda (x)
+                              (if (= (length x) 2)
+                                (map parse-exp x)
+                                (eopl:error 'parse-exp "case conditions must take a value and an expression")))
+                            (cddr datum)))
+                     (eopl:error 'parse-exp "case must have a value and at least one condition"))]
+                [(eqv? 'begin (car datum))
+                 (begin-exp (map parse-exp (cdr datum)))]
 				[else 
 					(app-exp 
 						(parse-exp (car datum))
@@ -541,6 +576,29 @@
 			; (newline)
 			; 	(list 'named-let-exp 'recurse '() (if-exp-void (syntax-expand condition) (begin-exp (map syntax-expand bodies))))
 			]
+            [cond-exp (bodies)
+                      (if (null? (cdr bodies))
+                        (if-exp-void (if (eqv? 'else (cadaar bodies))
+                                       (lit-exp #t)
+                                       (syntax-expand (caar bodies)))
+                                     (syntax-expand (cadar bodies)))
+                        (if-exp (syntax-expand (caar bodies))
+                                (syntax-expand (cadar bodies))
+                                (syntax-expand (cond-exp (cdr bodies)))))]
+            [case-exp (condition bodies)
+                      (if (null? (cdr bodies))
+                        (if-exp-void (if (eqv? 'else (cadaar bodies))
+                                       (lit-exp #t)
+                                       (app-exp (var-exp 'eqv?) (list (syntax-expand (caar bodies)) (syntax-expand condition))))
+                                     (syntax-expand (cadar bodies)))
+                        (if-exp (app-exp (var-exp 'eqv?) (list (syntax-expand (caar bodies)) (syntax-expand condition)))
+                                (syntax-expand (cadar bodies))
+                                (syntax-expand (case-exp condition (cdr bodies)))))]
+            [begin-exp (bodies)
+                       (if (null? bodies)
+                         (lit-exp (void))
+                         (app-exp (lambda-exp '() (map syntax-expand bodies)) '()))]
+                                    
 		)
 	)
 )
@@ -720,7 +778,7 @@
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
 
-(define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map))
+(define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map eqv?))
 
 (define init-env         ; for now, our initial global environment only contains 
   (extend-env            ; procedure names.  Recall that an environment associates
@@ -846,6 +904,8 @@
                    (helper proc (cdr args)
                            (cons (apply-proc proc (list (car args)))
                                  acc)))))]
+      [(eqv?) (if (arg-number eqv? args 2)
+                (eqv? (1st args) (2nd args)))]
       [else (eopl:error 'apply-prim-proc 
             "Bad primitive procedure name: ~s" 
             prim-proc)])))
