@@ -192,6 +192,16 @@
 		(id expression?)
 		(value expression?)
 	]
+	[and-exp 
+		(bodies 
+			(lambda (x) (andmap expression? x))
+		)
+	]
+	[or-exp 
+		(bodies (lambda (x) 
+			(andmap expression? x))
+		)
+	]
 )
 
 (define (parse-exp datum)
@@ -370,6 +380,12 @@
 						(eopl:error 'parse-exp "set! must take a variable name and an expression")
 					)
 				]
+				[(eqv? 'and (car datum))
+					(and-exp (map parse-exp (cdr datum)))
+				]
+				[(eqv? 'or (car datum))
+					(or-exp (map parse-exp (cdr datum)))
+				]
 				[else 
 					(app-exp 
 						(parse-exp (car datum))
@@ -453,6 +469,12 @@
 					)
 				)
 			]
+			[and-exp (bodies)
+				(cons 'and bodies)
+			]
+			[or-exp (bodies)
+				(cons 'or bodies)
+			]
 		)
 	)
 )
@@ -482,6 +504,24 @@
 			[if-exp (condition if-true if-false) exp]
 			[if-exp-void (condition if-true) exp]
 			[set-exp (id value) exp]
+			[or-exp (bodies)
+				(if (null? bodies)
+					(lit-exp #f)
+					(if (null? (cdr bodies))
+						(syntax-expand (car bodies))
+						(if-exp (syntax-expand (car bodies)) (car bodies) (syntax-expand (or-exp (cdr bodies))))
+					)
+				)
+			]
+			[and-exp (bodies)
+				(if (null? bodies)
+					(lit-exp #t)
+					(if (null? (cdr bodies))
+						(syntax-expand (car bodies))
+						(if-exp (syntax-expand (car bodies)) (syntax-expand (and-exp (cdr bodies))) (car bodies))
+					)
+				)
+			]
 		)
 	)
 )
@@ -787,10 +827,10 @@
   (lambda ()
     (display "--> ")
     ;; notice that we don't save changes to the environment...
-    (let ([answer (top-level-eval (parse-exp (read)))])
+    (let ([answer (top-level-eval (syntax-expand (parse-exp (read))))])
       ;; TODO: are there answers that should display differently?
       (eopl:pretty-print answer) (newline)
       (rep))))  ; tail-recursive, so stack doesn't grow.
 
 (define eval-one-exp
-  (lambda (x) (top-level-eval (parse-exp x))))
+  (lambda (x) (top-level-eval (syntax-expand (parse-exp x)))))
