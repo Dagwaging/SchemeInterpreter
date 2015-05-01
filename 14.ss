@@ -217,8 +217,9 @@
       (condition expression?)
       (bodies (lambda (x)
                 (andmap (lambda (y)
-                          (and (expression? (car y))
-                               (expression? (cadr y)))) x)))]
+                          (and (or (expression? (car y)) (andmap expression? (car y)))
+                               (expression? (cadr y))))
+                        x)))]
     [begin-exp
       (bodies (lambda (x)
                  (andmap expression? x)))]
@@ -424,7 +425,7 @@
                        (parse-exp (cadr datum))
                        (map (lambda (x)
                               (if (= (length x) 2)
-                                (map parse-exp x)
+                                (list (lit-exp (car x)) (parse-exp (cadr x)))
                                 (eopl:error 'parse-exp "case conditions must take a value and an expression")))
                             (cddr datum)))
                      (eopl:error 'parse-exp "case must have a value and at least one condition"))]
@@ -589,17 +590,12 @@
                       (if (null? (cdr bodies))
                         (if-exp-void (if (eqv? 'else (cadaar bodies))
                                        (lit-exp #t)
-                                       (app-exp (var-exp (if (list? (caar bodies))
-                                                           'member
-                                                           'eqv?))
-                                                (list (syntax-expand condition) (syntax-expand (caar bodies)))))
-                                     (syntax-expand (cadar bodies)))
-                        (if-exp (app-exp (var-exp (if (list? (caar bodies))
-                                                           'member
-                                                           'eqv?))
-                                                (list (syntax-expand condition) (syntax-expand (caar bodies))))
-                                (syntax-expand (cadar bodies))
-                                (syntax-expand (case-exp condition (cdr bodies)))))]
+                                       (app-exp (var-exp (if (list? (caar bodies)) 'member 'eqv?)) (list (syntax-expand condition) (caar bodies))))
+                                       (syntax-expand (cadar bodies)))
+                        (if-exp
+                          (app-exp (var-exp (if (list? (caar bodies)) 'member 'eqv?)) (list (syntax-expand condition) (caar bodies)))
+                          (syntax-expand (cadar bodies))
+                          (syntax-expand (case-exp condition (cdr bodies)))))]
             [begin-exp (bodies)
                        (if (null? bodies)
                          (lit-exp (void))
@@ -784,7 +780,7 @@
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
 
-(define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map eqv? quotient))
+(define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map eqv? quotient set-car! member))
 
 (define init-env         ; for now, our initial global environment only contains 
   (extend-env            ; procedure names.  Recall that an environment associates
@@ -914,6 +910,10 @@
                 (eqv? (1st args) (2nd args)))]
       [(quotient) (if (arg-number quotient args 2)
                     (quotient (1st args) (2nd args)))]
+      [(set-car!) (if (arg-number set-car! args 2)
+                    (set-car! (1st args) (2nd args)))]
+      [(member) (if (arg-number member args 2)
+                    (member (1st args) (2nd args)))]
       [else (eopl:error 'apply-prim-proc 
             "Bad primitive procedure name: ~s" 
             prim-proc)])))
