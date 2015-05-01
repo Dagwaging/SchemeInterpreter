@@ -535,8 +535,11 @@
 					)
 				)
 			]
-			[while-exp
-
+			[while-exp (condition bodies)
+			exp
+			; (display (map syntax-expand bodies))
+			; (newline)
+			; 	(list 'named-let-exp 'recurse '() (if-exp-void (syntax-expand condition) (begin-exp (map syntax-expand bodies))))
 			]
 		)
 	)
@@ -662,6 +665,14 @@
       [if-exp-void (condition if-true)
               (if (eval-exp condition env)
                 (eval-exp if-true env))]
+      [when-exp (condition bodies)
+      	(if (eval-exp condition env) 
+      		(begin 
+      			(eval-bodies bodies env) 
+      			(eval-exp exp env)
+      		)
+      	)
+      ]
       [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 ; evaluate the list of operands, putting results into a list
