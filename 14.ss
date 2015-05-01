@@ -494,8 +494,9 @@
 				exp
 			]
 			[let*-exp (vars bodies)
-				; TODO
-				exp
+                                    (if (null? vars)
+                                      (let-exp vars (map syntax-expand bodies))
+                                      (let-exp (list (car vars)) (list (syntax-expand (let*-exp (cdr vars) bodies))))) 
 			]
 			[named-let-exp (name vars bodies)
 				; TODO
