@@ -202,6 +202,12 @@
 			(andmap expression? x))
 		)
 	]
+	[while-exp
+		(condition expression?)
+		(bodies (lambda (x) 
+			(andmap expression? x))
+		)
+	]
 )
 
 (define (parse-exp datum)
@@ -386,6 +392,9 @@
 				[(eqv? 'or (car datum))
 					(or-exp (map parse-exp (cdr datum)))
 				]
+				[(eqv? 'while (car datum))
+					(while-exp (parse-exp (cadr datum)) (map parse-exp (cddr datum)))
+				]
 				[else 
 					(app-exp 
 						(parse-exp (car datum))
@@ -475,6 +484,9 @@
 			[or-exp (bodies)
 				(cons 'or bodies)
 			]
+			[while-exp (condition bodies)
+				(list 'while condition (map unparse-exp bodies))
+			]
 		)
 	)
 )
@@ -494,9 +506,9 @@
 				exp
 			]
 			[let*-exp (vars bodies)
-                                    (if (null? vars)
-                                      (let-exp vars (map syntax-expand bodies))
-                                      (let-exp (list (car vars)) (list (syntax-expand (let*-exp (cdr vars) bodies))))) 
+		        (if (null? vars)
+		          	(let-exp vars (map syntax-expand bodies))
+		          	(let-exp (list (car vars)) (list (syntax-expand (let*-exp (cdr vars) bodies))))) 
 			]
 			[named-let-exp (name vars bodies)
 				; TODO
@@ -522,6 +534,9 @@
 						(if-exp (syntax-expand (car bodies)) (syntax-expand (and-exp (cdr bodies))) (car bodies))
 					)
 				)
+			]
+			[while-exp
+
 			]
 		)
 	)
