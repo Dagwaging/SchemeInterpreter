@@ -747,14 +747,14 @@
       [(cdddr) (if (arg-number cdddr args 1)
              (cdddr (1st args)))]
       [(apply)
-             (apply-proc (car args) (cdr args))]
+             (apply-proc (car args) (cadr args))]
       [(map) (if (arg-number map args 2)
-               (let helper ([proc (car args)] [args (cdr args)] [acc '()])
-                (if (null? args)
-                  (reverse acc)
-                  (helper proc (cdr args)
-                          (cons (apply-proc proc (car args))
-                                acc)))))]
+               (let helper ([proc (car args)] [args (cadr args)] [acc '()])
+                 (if (null? args)
+                   (reverse acc)
+                   (helper proc (cdr args)
+                           (cons (apply-proc proc (list (car args)))
+                                 acc)))))]
       [else (eopl:error 'apply-prim-proc 
             "Bad primitive procedure name: ~s" 
             prim-proc)])))
