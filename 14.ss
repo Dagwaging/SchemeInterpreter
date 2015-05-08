@@ -1,4 +1,4 @@
-; Assignment 13
+; Assignment 16
 ; Zane Geiger & Philip Ross
 
 (load "chez-init.ss") 
@@ -547,8 +547,14 @@
 		          	(let-exp (list (car vars)) (list (syntax-expand (let*-exp (cdr vars) bodies))))) 
 			]
 			[named-let-exp (name vars bodies)
-				; TODO
-				(named-let-exp name (syntax-expand vars) (map syntax-expand bodies))
+				(letrec-exp
+                                  (list (list
+                                          (var-exp name)
+                                          (lambda-exp (map cadar vars)
+                                                      (map syntax-expand bodies))))
+                                  (list (app-exp
+                                          (var-exp name)
+                                          (map syntax-expand (map cadr vars)))))
 			]
 			[if-exp (condition if-true if-false) (if-exp (syntax-expand condition) (syntax-expand if-true) (syntax-expand if-false))]
 			[if-exp-void (condition if-true) (if-exp-void (syntax-expand condition) (syntax-expand if-true))]
