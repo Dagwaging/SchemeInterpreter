@@ -47,7 +47,7 @@
   (empty-env-record)
   (extended-env-record
    (syms (list-of symbol?))
-   (vals (list-of scheme-value?))
+   (vals scheme-value?)
    (env environment?)))
 
 ; datatype for procedures.  At first there is only one
@@ -571,7 +571,7 @@
       (extended-env-record (syms vals env)
 	(let ((pos (list-find-position sym syms)))
       	  (if (number? pos)
-	      (succeed (list-ref vals pos))
+	      (succeed (vector-ref vals pos))
 	      (apply-env env sym succeed fail)))))))
 
 
@@ -599,8 +599,7 @@
 				(app-exp (lambda-exp (map cadar vars) (map syntax-expand bodies)) (map syntax-expand (map cadr vars)))
 			]
 			[letrec-exp (vars bodies)
-				; TODO
-                                (letrec-exp (map syntax-expand vars) (map syntax-expand bodies))
+                                (letrec-exp (map list (map car vars) (map syntax-expand (map cadr vars))) (map syntax-expand bodies))
 			]
 			[let*-exp (vars bodies)
 		        (if (null? vars)
@@ -699,8 +698,10 @@
            (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
 		          "variable not found in environment: ~s"
 			   id)))] 
+      [letrec-exp (vars bodies)
+                  (eval-bodies bodies (extend-env-recursively vars env))] 
       [let-exp (vars bodies)
-               (let ([new-env (extend-env (map cadar vars) (eval-rands (map cadr vars) env) env)])
+               (let ([new-env (extend-env (map cadar vars) (apply vector (eval-rands (map cadr vars) env)) env)])
                      (eval-bodies bodies new-env))]
       [lambda-exp (ids bodies)
                   (cond
@@ -731,6 +732,18 @@
       ]
       [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
+(define (extend-env-recursively vals env)
+  (let* ([syms (map car vals)]
+        [new-vals (make-vector (length syms))]
+        [new-env (extended-env-record (map cadr syms) new-vals env)])
+    (let helper ([i 0] [vals vals])
+      (if (null? vals)
+        new-env
+        (begin
+          (vector-set! new-vals i
+                       (eval-exp (cadr (car vals)) new-env))
+          (helper (+ i 1) (cdr vals)))))))
+
 ; evaluate the list of operands, putting results into a list
 
 (define eval-rands
@@ -754,10 +767,10 @@
       [prim-proc (op) (apply-prim-proc op args)]
 			; You will add other cases
       [closure (ids bodies env)
-                  (let ([new-env (extend-env ids args env)])
+                  (let ([new-env (extend-env ids (apply vector args) env)])
                     (eval-bodies bodies new-env))]
       [closure-list (id bodies env)
-                  (let ([new-env (extend-env (list id) (list args) env)])
+                  (let ([new-env (extend-env (list id) (vector args) env)])
                     (eval-bodies bodies new-env))]
       [closure-dot (ids bodies env)
                   (let ([new-env (extend-env
@@ -766,23 +779,23 @@
                                        (cons (car ids)
                                              (helper (cdr ids)))
                                        (list ids)))
-                                   (let helper ([ids ids] [args args])
+                                   (apply vector (let helper ([ids ids] [args args])
                                      (if (pair? ids)
                                        (cons (car args)
                                              (helper (cdr ids) (cdr args)))
-                                       (list args))) env)])
+                                       (list args)))) env)])
                     (eval-bodies bodies new-env))]
       [else (eopl:error 'apply-proc
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
 
-(define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map eqv? quotient set-car! member))
+(define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map eqv? quotient set-car! member append list-tail))
 
 (define init-env         ; for now, our initial global environment only contains 
   (extend-env            ; procedure names.  Recall that an environment associates
      *prim-proc-names*   ;  a value (not an expression) with an identifier.
-     (map prim-proc      
-          *prim-proc-names*)
+     (apply vector (map prim-proc      
+          *prim-proc-names*))
      (empty-env)))
 
 (define (arg-number proc args expected)
@@ -910,6 +923,10 @@
                     (set-car! (1st args) (2nd args)))]
       [(member) (if (arg-number member args 2)
                     (member (1st args) (2nd args)))]
+      [(append)
+       (apply append args)]
+      [(list-tail) (if (arg-number list-tail args 2)
+                     (list-tail (1st args) (2nd args)))]
       [else (eopl:error 'apply-prim-proc 
             "Bad primitive procedure name: ~s" 
             prim-proc)])))
