@@ -218,11 +218,16 @@
       (bodies (lambda (x)
                 (andmap (lambda (y)
                           (and (or (expression? (car y)) (andmap expression? (car y)))
-                               (expression? (cadr y))))
+                               (andmap expression? (cadr y))))
                         x)))]
     [begin-exp
       (bodies (lambda (x)
                  (andmap expression? x)))]
+    [case-lambda-exp
+      (cases (lambda (x)
+               (andmap (lambda (y)
+                         (and (andmap expression? (car y)) (andmap expression? (cadr y))))
+               x)))]
 )
 
 (define (parse-exp datum)
@@ -424,13 +429,21 @@
                      (case-exp
                        (parse-exp (cadr datum))
                        (map (lambda (x)
-                              (if (= (length x) 2)
-                                (list (lit-exp (car x)) (parse-exp (cadr x)))
+                              (if (>= (length x) 2)
+                                (list (lit-exp (car x)) (map parse-exp (cdr x)))
                                 (eopl:error 'parse-exp "case conditions must take a value and an expression")))
                             (cddr datum)))
                      (eopl:error 'parse-exp "case must have a value and at least one condition"))]
                 [(eqv? 'begin (car datum))
                  (begin-exp (map parse-exp (cdr datum)))]
+                [(eqv? 'case-lambda (car datum))
+                 (if (null? (cdr datum))
+                   (eopl:error 'parse-exp "case-lambda must have at least one case")
+                   (if (ormap (lambda (x) (not (>= (length x) 2))) (cdr datum))
+                     (eopl:error 'parse-exp "case-lambda cases must have a list of parameters and a body")
+                     (case-lambda-exp (map (lambda (body)
+                                             (list (map parse-exp (car body)) (map parse-exp (cdr body))))
+                                           (cdr datum)))))]
 				[else 
 					(app-exp 
 						(parse-exp (car datum))
@@ -657,15 +670,27 @@
                         (if-exp-void (if (eqv? 'else (cadaar bodies))
                                        (lit-exp #t)
                                        (app-exp (var-exp (if (list? (caar bodies)) 'member 'eqv?)) (list (syntax-expand condition) (caar bodies))))
-                                       (syntax-expand (cadar bodies)))
+                                       (syntax-expand (begin-exp (cadar bodies))))
                         (if-exp
                           (app-exp (var-exp (if (list? (caar bodies)) 'member 'eqv?)) (list (syntax-expand condition) (caar bodies)))
-                          (syntax-expand (cadar bodies))
+                          (syntax-expand (begin-exp (cadar bodies)))
                           (syntax-expand (case-exp condition (cdr bodies)))))]
             [begin-exp (bodies)
                        (if (null? bodies)
                          (lit-exp (void))
                          (app-exp (lambda-exp '() (map syntax-expand bodies)) '()))]
+            [case-lambda-exp (bodies)
+                             (lambda-exp 'args (list
+                                                 (syntax-expand (case-exp (app-exp (var-exp 'length) (list (var-exp 'args)))
+                                                                          (map (lambda (body)
+                                                                                 (list (lit-exp (list (length (car body))))
+                                                                                       (let helper ([args (car body)])
+                                                                                         (if (null? args)
+                                                                                           (cadr body)
+                                                                                           (list (let-exp (list (list (car args) (app-exp (var-exp 'car) (list (var-exp 'args))))
+                                                                                                          (list (var-exp 'args) (app-exp (var-exp 'cdr) (list (var-exp 'args)))))
+                                                                                                    (helper (cdr args))))))))
+                                                                               bodies)))))]
                                     
 		)
 	)
