@@ -1,4 +1,4 @@
-; Assignment 16
+; Assignment 17
 ; Zane Geiger & Philip Ross
 
 (load "chez-init.ss") 
@@ -46,9 +46,10 @@
 (define-datatype environment environment?
   (empty-env-record)
   (extended-env-record
-   (syms (list-of symbol?))
-   (vals scheme-value?)
-   (env environment?)))
+    (vars (lambda (x)
+            (and ((list-of symbol?) (car x))
+                 (scheme-value? (cdr x)))))
+    (env environment?)))
 
 ; datatype for procedures.  At first there is only one
 ; kind of procedure, but more kinds will be added later.
@@ -560,7 +561,7 @@
 
 (define extend-env
   (lambda (syms vals env)
-    (extended-env-record syms vals env)))
+    (extended-env-record (cons syms vals) env)))
 
 (define list-find-position
   (lambda (sym los)
@@ -581,10 +582,10 @@
     (cases environment env
       (empty-env-record ()
         (fail))
-      (extended-env-record (syms vals env)
-	(let ((pos (list-find-position sym syms)))
+      (extended-env-record (vars env)
+	(let ((pos (list-find-position sym (car vars))))
       	  (if (number? pos)
-	      (succeed (vector-ref vals pos))
+	      (succeed (vector-ref (cdr vars) pos))
 	      (apply-env env sym succeed fail)))))))
 
 
@@ -760,7 +761,7 @@
 (define (extend-env-recursively vals env)
   (let* ([syms (map car vals)]
         [new-vals (make-vector (length syms))]
-        [new-env (extended-env-record (map cadr syms) new-vals env)])
+        [new-env (extended-env-record (cons (map cadr syms) new-vals) env)])
     (let helper ([i 0] [vals vals])
       (if (null? vals)
         new-env
