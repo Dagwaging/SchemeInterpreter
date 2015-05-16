@@ -645,7 +645,8 @@
 					(lit-exp #f)
 					(if (null? (cdr bodies))
 						(syntax-expand (car bodies))
-						(if-exp (syntax-expand (car bodies)) (syntax-expand (car bodies)) (syntax-expand (or-exp (cdr bodies))))
+                                                (let-exp (list (list (var-exp 'if-exp-result) (syntax-expand (car bodies))))
+                                                         (list (if-exp (var-exp 'if-exp-result) (var-exp 'if-exp-result) (syntax-expand (or-exp (cdr bodies))))))
 					)
 				)
 			]
