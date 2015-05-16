@@ -229,6 +229,9 @@
                (andmap (lambda (y)
                          (and (andmap expression? (car y)) (andmap expression? (cadr y))))
                x)))]
+    [define-exp
+      (id symbol?)
+      (value expression?)]
 )
 
 (define (parse-exp datum)
@@ -445,6 +448,10 @@
                      (case-lambda-exp (map (lambda (body)
                                              (list (map parse-exp (car body)) (map parse-exp (cdr body))))
                                            (cdr datum)))))]
+                [(eqv? 'define (car datum))
+                 (if (not (= (length datum) 3))
+                   (eopl:error 'parse-exp "define must have an id and a value")
+                   (define-exp (cadr datum) (parse-exp (caddr datum))))]
 				[else 
 					(app-exp 
 						(parse-exp (car datum))
@@ -692,6 +699,8 @@
                                                                                                           (list (var-exp 'args) (app-exp (var-exp 'cdr) (list (var-exp 'args)))))
                                                                                                     (helper (cdr args))))))))
                                                                                bodies)))))]
+            [define-exp (id value)
+                        (define-exp id (syntax-expand value))]
                                     
 		)
 	)
@@ -756,7 +765,42 @@
       		)
       	)
       ]
+      [set-exp (id value)
+               (let helper ([recur-env env])
+                 (cases environment recur-env
+                        [empty-env-record ()
+                                          (eopl:error 'eval-exp "No environment found!")]
+                        [extended-env-record (vars next-env)
+                                             (let ([i (list-find-position (cadr id) (car vars))])
+                                               (cond [i
+                                                       (vector-set! (cdr vars) i (eval-exp value env))]
+                                                     [(eqv? next-env (empty-env))
+                                                      (set-car! vars (append (car vars) (list (cadr id))))
+                                                      (set-cdr! vars (vector-append (cdr vars) (eval-exp value env)))]
+                                                     [else
+                                                       (helper next-env)]))]))]
+      [define-exp (id value)
+                  (cases environment env
+                         [empty-env-record ()
+                                           (eopl:error 'eval-exp "No environment found!")]
+                         [extended-env-record (vars next-env)
+                                              (let ([i (list-find-position id (car vars))])
+                                                (cond [i
+                                                        (vector-set! (cdr vars) i (eval-exp value env))]
+                                                      [else
+                                                        (set-car! vars (append (car vars) (list id)))
+                                                        (set-cdr! vars (vector-append (cdr vars) (eval-exp value env)))]))])]
       [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
+
+(define (vector-append v . args)
+    (apply vector (append (vector->list v) args)))
+
+(define (reset-global-env)
+  (set! init-env (extend-env
+                   *prim-proc-names*
+                   (apply vector (map prim-proc      
+                                      *prim-proc-names*))
+                   (empty-env))))
 
 (define (extend-env-recursively vals env)
   (let* ([syms (map car vals)]
