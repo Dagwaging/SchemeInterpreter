@@ -731,9 +731,11 @@
       [var-exp (id)
                (apply-env env id; look up its value.
       	   (lambda (x) x) ; procedure to call if id is in the environment 
-           (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
-		          "variable not found in environment: ~s"
-			   id)))] 
+           (lambda () (apply-env global-env id
+                      (lambda (x) x)
+                      (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
+                                             "variable not found in environment: ~s"
+                                             id)))))] 
       [letrec-exp (vars bodies)
                   (eval-bodies bodies (extend-env-recursively vars env))] 
       [let-exp (vars bodies)
@@ -797,11 +799,7 @@
     (apply vector (append (vector->list v) args)))
 
 (define (reset-global-env)
-  (set! init-env (extend-env
-                   *prim-proc-names*
-                   (apply vector (map prim-proc      
-                                      *prim-proc-names*))
-                   (empty-env))))
+  (set! init-env (extend-env (list) (vector) (empty-env))))
 
 (define (extend-env-recursively vals env)
   (let* ([syms (map car vals)]
@@ -862,12 +860,14 @@
 
 (define *prim-proc-names* '(+ - * / zero? not add1 sub1 cons = < > >= <= list car cdr null? assq eq? equal? atom? length list->vector list? pair? procedure? vector->list vector make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! display newline cadr caar cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map eqv? quotient set-car! member append list-tail))
 
-(define init-env         ; for now, our initial global environment only contains 
+(define global-env       ; for now, our initial global environment only contains 
   (extend-env            ; procedure names.  Recall that an environment associates
      *prim-proc-names*   ;  a value (not an expression) with an identifier.
      (apply vector (map prim-proc      
           *prim-proc-names*))
      (empty-env)))
+
+(define init-env (extend-env (list) (vector) (empty-env)))
 
 (define (arg-number proc args expected)
   (if (= (length args) expected)
