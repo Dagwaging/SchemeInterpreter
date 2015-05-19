@@ -570,10 +570,6 @@
   (lambda (syms vals env)
     (extended-env-record (cons syms vals) env)))
 
-(define extend-env-k
-  (lambda (syms vals env k)
-    (apply-k k (extended-env-record (cons syms vals) env))))
-
 (define list-find-position
   (lambda (sym los k)
     (list-index (lambda (xsym) (eqv? sym xsym)) los k)))
@@ -748,8 +744,7 @@
                                                      (eval-bodies bodies env k)))]
       [let-exp (vars bodies)
                (eval-rands (map cadr vars) env (lambda (rands)
-                                                 (extend-env-k (map cadar vars) (apply vector rands) env (lambda (new-env)
-                                                                                                         (eval-bodies bodies new-env k)))))]
+                                                 (eval-bodies bodies (extend-env (map cadar vars) (apply vector rands) env k))))]
       [lambda-exp (ids bodies)
                   (cond
                     [(list? ids)
@@ -857,13 +852,11 @@
       [prim-proc (op) (apply-prim-proc op args k)]
 			; You will add other cases
       [closure (ids bodies env)
-               (extend-env-k ids (apply vector args) env (lambda (new-env)
-                                                         (eval-bodies bodies new-env k)))]
+               (eval-bodies bodies (extend-env ids (apply vector args) env) k)]
       [closure-list (id bodies env)
-                    (extend-env-k (list id) (vector args) env (lambda (new-env)
-                                                              (eval-bodies bodies new-env k)))]
+                    (eval-bodies bodies (extend-env (list id) (vector args) env) k)]
       [closure-dot (ids bodies env)
-                  (extend-env-k
+                  (eval-bodies bodies (extend-env
                     (let helper ([ids ids])
                       (if (pair? ids)
                         (cons (car ids)
@@ -874,9 +867,7 @@
                                       (cons (car args)
                                             (helper (cdr ids) (cdr args)))
                                       (list args))))
-                    env
-                    (lambda (new-env)
-                      (eval-bodies bodies new-env k)))]
+                    env) k)]
       [else (eopl:error 'apply-proc
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
