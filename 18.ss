@@ -776,7 +776,8 @@
                  (eval-exp condition env (lambda (val)
                                            (if val
                                              (eval-bodies bodies env (lambda (result)
-                                                                       (eval-exp exp env k))))))]
+                                                                       (eval-exp exp env k)))
+                                             (apply-k k (void)))))]
       [set-exp (id value)
                (let helper ([recur-env env])
                  (cases environment recur-env
