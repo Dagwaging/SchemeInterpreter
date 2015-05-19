@@ -773,7 +773,7 @@
                                                (eval-exp if-true env k)
                                                (apply-k k (void)))))]
       [while-exp (condition bodies)
-                 (eval-exp confition env (lambda (val)
+                 (eval-exp condition env (lambda (val)
                                            (if val
                                              (eval-bodies bodies env (lambda (result)
                                                                        (eval-exp exp env k))))))]
