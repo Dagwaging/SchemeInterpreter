@@ -801,7 +801,7 @@
                          [extended-env-record (vars next-env)
                                               (list-find-position id (car vars) (lambda (pos)
                                                 (cond [pos
-                                                        (apply-k k (vector-set! (cdr vars) i (eval-exp value env)))]
+                                                        (apply-k k (vector-set! (cdr vars) pos (eval-exp value env)))]
                                                       [else
                                                         (set-car! vars (append (car vars) (list id)))
                                                         (eval-exp value env (lambda (val)
