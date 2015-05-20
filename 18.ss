@@ -588,7 +588,7 @@
   (lambda (env sym succeed fail) ; succeed and fail are procedures applied if the var is or isn't found, respectively.
     (cases environment env
       (empty-env-record ()
-        (fail))
+        (apply-k fail (void)))
       (extended-env-record (vars env)
 	(let ((pos (list-find-position sym (car vars))))
       	  (if (number? pos)
@@ -713,17 +713,107 @@
 ;                   |
 ;-------------------+
 
+(define-datatype continuation continuation?
+                 [test-k (then-exp expression?)
+                         (else-exp expression?)
+                         (env environment?)
+                         (k continuation?)]
+                 [test-k-void (then-exp expression?)
+                              (env environment?)
+                              (k continuation?)]
+                 [rator-k (rands (list-of expression?))
+                          (env environment?)
+                          (k continuation?)]
+                 [rands-k (proc-value scheme-value?)
+                          (k continuation?)]
+                 [while-k (exp expression?)
+                          (bodies (list-of expression?))
+                          (env environment?)
+                          (k continuation?)]
+                 [eval-k (exp expression?)
+                         (env environment?)
+                         (k continuation?)]
+                 [apply-global-env-k (env environment?)
+                              (id symbol?)
+                              (success continuation?)]
+                 [no-var-k (id symbol?)]
+                 [letrec-k (bodies (list-of expression?))
+                           (k continuation?)]
+                 [set-k (vars pair?)
+                        (pos number?)
+                        (k continuation?)]
+                 [define-k (vars pair?)
+                           (k continuation?)]
+                 [bodies-k (bodies (list-of expression?))
+                           (env environment?)
+                           (k continuation?)]
+                 [helper-k (proc procedure?)
+                           (args list?)]
+                 [map-helper-k (proc proc-val?)
+                               (l list?)
+                               (k continuation?)]
+                 [cons-k (l list?)
+                           (k continuation?)]
+                 [extend-env-k (new-vals box?)
+                               (pos number?)
+                               (vals list?)
+                               (proc procedure?)]
+                 [identity-k])
 
 ; Temporary. Will switch to datatype representation once eval-exp and friends are converted to cps style.
-(define (apply-k k . args)
-  (apply k args))
+(define (apply-k k val)
+  (cases continuation k
+         [test-k (then-exp else-exp env k)
+                 (if val
+                   (eval-exp then-exp env k)
+                   (eval-exp else-exp env k))]
+         [test-k-void (then-exp env k)
+                      (if val
+                        (eval-exp then-exp env k)
+                        (apply-k k (void)))]
+         [rator-k (rands env k)
+                  (eval-rands rands env (rands-k val k))]
+         [rands-k (proc-value k)
+                  (apply-proc proc-value val k)]
+         [while-k (exp bodies env k)
+                  (if val
+                    (eval-bodies bodies env (eval-k exp env k))
+                    (apply-k k (void)))]
+         [eval-k (exp env k)
+                 (eval-exp exp env k)]
+         [apply-global-env-k (env id success)
+                      (apply-env env id success (no-var-k id))]
+         [no-var-k (id)
+                   (eopl:error 'apply-env "variable not found in environment: ~s" id)]
+         [letrec-k (bodies k)
+                   (eval-bodies bodies val k)]
+         [set-k (vars pos k)
+                (apply-k k (vector-set! (cdr vars) pos val))]
+         [define-k (vars k)
+                   (apply-k k (set-cdr! vars (vector-append (cdr vars) val)))]
+         [bodies-k (bodies env k)
+                   (eval-bodies bodies env k)]
+         [helper-k (proc args)
+                   (apply proc args)]
+         [map-helper-k (proc l k)
+                       (if (null? l)
+                         (apply-k k (reverse val))
+                         (apply-proc proc (list (car l))
+                                     (cons-k val (map-helper-k proc (cdr l) k))))]
+         [cons-k (l k)
+                   (apply-k k (cons val l))]
+         [extend-env-k (new-vals pos vals proc)
+                       (vector-set! (unbox new-vals) pos val)
+                       (proc (+ pos 1) (cdr vals))]
+         [identity-k ()
+           val]))
 
 ; top-level-eval evaluates a form in the global environment
 
 (define top-level-eval
   (lambda (form)
     ; later we may add things that are not expressions.
-    (eval-exp form init-env (lambda (x) x))))
+    (eval-exp form init-env (identity-k))))
 
 ; eval-exp is the main component of the interpreter
 
@@ -732,16 +822,11 @@
     (cases expression exp
       [lit-exp (datum) (apply-k k datum)]
       [var-exp (id)
-               (apply-env env id; look up its value.
-      	   k ; procedure to call if id is in the environment 
-           (lambda () (apply-env global-env id
-                      k
-                      (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
-                                             "variable not found in environment: ~s"
-                                             id)))))] 
+               (apply-env env id k
+                          (apply-global-env-k global-env id k))]
       [letrec-exp (vars bodies)
-                  (extend-env-recursively vars env (lambda (env)
-                                                     (eval-bodies bodies env k)))]
+                  (extend-env-recursively vars env
+                                          (letrec-k bodies k))]
       [lambda-exp (ids bodies)
                   (cond
                     [(list? ids)
@@ -751,25 +836,17 @@
                     [(symbol? ids)
                      (apply-k k (closure-list ids bodies env))])]
       [app-exp (rator rands)
-               (eval-exp rator env (lambda (proc-value)
-                                     (eval-rands rands env (lambda (args)
-                                                             (apply-proc proc-value args k)))))]
+               (eval-exp rator env
+                         (rator-k rands env k))]
       [if-exp (condition if-true if-false)
-              (eval-exp condition env (lambda (val)
-                                        (if val
-                                          (eval-exp if-true env k)
-                                          (eval-exp if-false env k))))]
+              (eval-exp condition env
+                        (test-k if-true if-false env k))]
       [if-exp-void (condition if-true)
-                   (eval-exp condition env (lambda (val)
-                                             (if val
-                                               (eval-exp if-true env k)
-                                               (apply-k k (void)))))]
+                   (eval-exp condition env
+                             (test-k-void if-true env k))]
       [while-exp (condition bodies)
-                 (eval-exp condition env (lambda (val)
-                                           (if val
-                                             (eval-bodies bodies env (lambda (result)
-                                                                       (eval-exp exp env k)))
-                                             (apply-k k (void)))))]
+                 (eval-exp condition env 
+                           (while-k exp bodies env k))]
       [set-exp (id value)
                (let helper ([recur-env env])
                  (cases environment recur-env
@@ -778,11 +855,11 @@
                         [extended-env-record (vars next-env)
                                              (let ([i (list-find-position (cadr id) (car vars))])
                                                (cond [i
-                                                       (eval-exp value env (lambda (val) (apply-k k (vector-set! (cdr vars) i val))))]
+                                                       (eval-exp value env
+                                                                 (set-k vars i k))]
                                                      [(eqv? next-env (empty-env))
                                                       (set-car! vars (append (car vars) (list (cadr id))))
-                                                      (eval-exp value env (lambda (val)
-                                                                            (apply-k k (set-cdr! vars (vector-append (cdr vars) val)))))]
+                                                      (eval-exp value env (define-k vars k))]
                                                      [else
                                                        (helper next-env)]))]))]
       [define-exp (id value)
@@ -792,11 +869,10 @@
                          [extended-env-record (vars next-env)
                                               (let ([i (list-find-position id (car vars))])
                                                 (cond [i
-                                                        (eval-exp value env (lambda (val) (vector-set! (cdr vars) i val)))]
+                                                        (eval-exp value env (set-k vars i k))]
                                                       [else
                                                         (set-car! vars (append (car vars) (list id)))
-                                                        (eval-exp value env (lambda (val)
-                                                                              (apply-k k (set-cdr! vars (vector-append (cdr vars) val)))))]))])]
+                                                        (eval-exp value env (define-k vars k))]))])]
       [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 (define (vector-append v . args)
@@ -819,21 +895,19 @@
     (let helper ([i 0] [vals vals])
       (if (null? vals)
         (apply-k k new-env)
-        (eval-exp (cadr (car vals)) new-env (lambda (val)
-                                              (vector-set! new-vals i val)
-                                              (helper (+ i 1) (cdr vals))))))))
+        (eval-exp (cadr (car vals)) new-env
+                  (extend-env-k (box new-vals) i vals helper))))))
 
 ; evaluate the list of operands, putting results into a list
 
 (define eval-rands
   (lambda (rands env k)
-    (map-k (lambda (x k) (eval-exp x env k)) rands k)))
+    (apply-k k (map (lambda (x) (eval-exp x env (identity-k))) rands))))
 
 (define (eval-bodies bodies env k)
   (if (null? (cdr bodies))
     (eval-exp (car bodies) env k)
-    (eval-exp (car bodies) env (lambda (val)
-                                 (eval-bodies (cdr bodies) env k)))))
+    (eval-exp (car bodies) env (bodies-k (cdr bodies) env k))))
 
 ;  Apply a procedure to its arguments.
 ;  At this point, we only have primitive procedures.  
@@ -987,12 +1061,7 @@
       [(apply)
              (apply-proc (car args) (cadr args) k)]
       [(map) (if (arg-number map args 2)
-               (let helper ([proc (car args)] [args (cadr args)] [acc '()])
-                 (if (null? args)
-                   (apply-k k (reverse acc))
-                   (apply-proc proc (list (car args)) (lambda (val)
-                                                        (helper proc (cdr args)
-                                                                (cons val acc)))))))]
+               (apply-k (map-helper-k (car args) (cadr args) k) '()))]
       [(eqv?) (apply-k k (if (arg-number eqv? args 2)
                 (eqv? (1st args) (2nd args))))]
       [(quotient) (apply-k k (if (arg-number quotient args 2)
