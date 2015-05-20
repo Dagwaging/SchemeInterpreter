@@ -593,7 +593,7 @@
 	(let ((pos (list-find-position sym (car vars))))
       	  (if (number? pos)
 	      (apply-k succeed (vector-ref (cdr vars) pos))
-	      (apply-env env sym succeed fail))))))))
+	      (apply-env env sym succeed fail)))))))
 
 
 
@@ -744,7 +744,7 @@
                                                      (eval-bodies bodies env k)))]
       [let-exp (vars bodies)
                (eval-rands (map cadr vars) env (lambda (rands)
-                                                 (eval-bodies bodies (extend-env (map cadar vars) (apply vector rands) env k))))]
+                                                 (eval-bodies bodies (extend-env (map cadar vars) (apply vector rands) env) k)))]
       [lambda-exp (ids bodies)
                   (cond
                     [(list? ids)
@@ -781,14 +781,13 @@
                         [extended-env-record (vars next-env)
                                              (let ([i (list-find-position (cadr id) (car vars))])
                                                (cond [i
-                                                       (vector-set! (cdr vars) i (eval-exp value env))]
+                                                       (eval-exp value env (lambda (val) (apply-k k (vector-set! (cdr vars) i val))))]
                                                      [(eqv? next-env (empty-env))
                                                       (set-car! vars (append (car vars) (list (cadr id))))
                                                       (eval-exp value env (lambda (val)
-                                                                            (vector-append (cdr vars) val (lambda (vec)
-                                                                                                            (apply-k k (set-cdr! vars vec))))))]
+                                                                            (apply-k k (set-cdr! vars (vector-append (cdr vars) val)))))]
                                                      [else
-                                                       (helper next-env)])))]))]
+                                                       (helper next-env)]))]))]
       [define-exp (id value)
                   (cases environment env
                          [empty-env-record ()
@@ -796,17 +795,15 @@
                          [extended-env-record (vars next-env)
                                               (let ([i (list-find-position id (car vars))])
                                                 (cond [i
-                                                        (vector-set! (cdr vars) i (eval-exp value env))]
+                                                        (eval-exp value env (lambda (val) (vector-set! (cdr vars) i val)))]
                                                       [else
                                                         (set-car! vars (append (car vars) (list id)))
                                                         (eval-exp value env (lambda (val)
-                                                                              (vector-append (cdr vars) (lambda (vec)
-                                                                                                              (apply-k k (set-cdr! vars vec)))
-                                                                                             val)))])))])]
+                                                                              (apply-k k (set-cdr! vars (vector-append (cdr vars) val)))))]))])]
       [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
-(define (vector-append v k . args)
-    (apply-k k (apply vector (append (vector->list v) args))))
+(define (vector-append v . args)
+    (apply vector (append (vector->list v) args)))
 
 (define (map-k proc-k l k)
   (let helper ([l l] [acc '()])
@@ -892,125 +889,125 @@
 ; built-in procedure individually.  We are "cheating" a little bit.
 
 (define apply-prim-proc
-  (lambda (prim-proc args)
+  (lambda (prim-proc args k)
     (case prim-proc
-      [(+) (apply + args)]
-      [(-) (apply - args)]
-      [(*) (apply * args)]
-      [(/) (apply / args)]
-      [(zero?) (if (arg-number zero? args 1)
-             (zero? (1st args)))]
-      [(not) (if (arg-number not args 1)
-             (not (1st args)))]
-      [(add1) (if (arg-number add1 args 1) 
-                (+ (1st args) 1))]
-      [(sub1) (if (arg-number sub1 args 1)
-                (- (1st args) 1))]
-      [(cons) (if (arg-number cons args 2)
-                (cons (1st args) (2nd args)))]
-      [(=) (if (arg-number = args 2)
-             (= (1st args) (2nd args)))]
-      [(<) (if (arg-number < args 2)
-             (< (1st args) (2nd args)))]
-      [(>) (if (arg-number > args 2)
-             (> (1st args) (2nd args)))]
-      [(>=) (if (arg-number >= args 2)
-             (>= (1st args) (2nd args)))]
-      [(<=) (if (arg-number <= args 2)
-             (<= (1st args) (2nd args)))]
-      [(list) (apply list args)]
-      [(car) (if (arg-number car args 1)
-             (car (1st args)))]
-      [(cdr) (if (arg-number cdr args 1)
-             (cdr (1st args)))]
-      [(null?) (if (arg-number null? args 1)
-             (null?(1st args)))]
-      [(assq) (if (arg-number assq args 2)
-             (assq (1st args) (2nd args)))]
-      [(eq?) (if (arg-number eq? args 2)
-             (eq? (1st args) (2nd args)))]
-      [(equal?) (if (arg-number equal? args 2)
-             (equal? (1st args) (2nd args)))]
-      [(atom?) (if (arg-number atom? args 1)
-             (atom? (1st args)))]
-      [(length) (if (arg-number length args 1)
-             (length (1st args)))]
-      [(list->vector) (if (arg-number list->vector args 1)
-             (list->vector (1st args)))]
-      [(list?) (if (arg-number list? args 1)
-             (list? (1st args)))]
-      [(pair?) (if (arg-number pair? args 1)
-             (pair? (1st args)))]
-      [(procedure?) (if (arg-number procedure? args 1)
-             (proc-val? (car args)))]
-      [(vector->list) (if (arg-number vector->list args 1)
-             (vector->list (1st args)))]
-      [(vector) (apply vector args)]
-      [(make-vector) (if (arg-number make-vector args 2)
-             (make-vector (1st args) (2nd args)))]
-      [(vector-ref) (if (arg-number vector-ref args 2)
-             (vector-ref (1st args) (2nd args)))]
-      [(vector?) (if (arg-number vector? args 1)
-             (vector? (1st args)))]
-      [(number?) (if (arg-number number? args 1)
-             (number? (1st args)))]
-      [(symbol?) (if (arg-number symbol? args 1)
-             (symbol? (1st args)))]
-      [(set-car!) (if (arg-number set-car! args 2)
-             (set-car! (1st args) (2nd args)))]
-      [(set-cdr!) (if (arg-number set-cdr! args 2)
-             (set-cdr! (1st args) (2nd args)))]
-      [(vector-set!) (if (arg-number vector-set! args 3)
-             (vector-set! (1st args) (2nd args) (3rd args)))]
-      [(display) (if (arg-number display args 1)
-             (display (1st args)))]
-      [(newline) (if (arg-number newline args 0)
-             (newline))]
-      [(cadr) (if (arg-number cadr args 1)
-             (cadr (1st args)))]
-      [(caar) (if (arg-number caar args 1)
-             (caar (1st args)))]
-      [(cdar) (if (arg-number cdar args 1)
-             (cdar (1st args)))]
-      [(cddr) (if (arg-number cddr args 1)
-             (cddr (1st args)))]
-      [(caadr) (if (arg-number caadr args 1)
-             (caadr (1st args)))]
-      [(caaar) (if (arg-number caaar args 1)
-             (caaar (1st args)))]
-      [(cadar) (if (arg-number cadar args 1)
-             (cadar (1st args)))]
-      [(caddr) (if (arg-number caddr args 1)
-             (caddr (1st args)))]
-      [(cdadr) (if (arg-number cdadr args 1)
-             (cdadr (1st args)))]
-      [(cdaar) (if (arg-number cdaar args 1)
-             (cdaar (1st args)))]
-      [(cddar) (if (arg-number cddar args 1)
-             (cddar (1st args)))]
-      [(cdddr) (if (arg-number cdddr args 1)
-             (cdddr (1st args)))]
+      [(+) (apply-k k (apply + args))]
+      [(-) (apply-k k (apply - args))]
+      [(*) (apply-k k (apply * args))]
+      [(/) (apply-k k (apply / args))]
+      [(zero?) (apply-k k (if (arg-number zero? args 1)
+             (zero? (1st args))))]
+      [(not) (apply-k k (if (arg-number not args 1)
+             (not (1st args))))]
+      [(add1) (apply-k k (if (arg-number add1 args 1) 
+                (+ (1st args) 1)))]
+      [(sub1) (apply-k k (if (arg-number sub1 args 1)
+                (- (1st args) 1)))]
+      [(cons) (apply-k k (if (arg-number cons args 2)
+                (cons (1st args) (2nd args))))]
+      [(=) (apply-k k (if (arg-number = args 2)
+             (= (1st args) (2nd args))))]
+      [(<) (apply-k k (if (arg-number < args 2)
+             (< (1st args) (2nd args))))]
+      [(>) (apply-k k (if (arg-number > args 2)
+             (> (1st args) (2nd args))))]
+      [(>=) (apply-k k (if (arg-number >= args 2)
+             (>= (1st args) (2nd args))))]
+      [(<=) (apply-k k (if (arg-number <= args 2)
+             (<= (1st args) (2nd args))))]
+      [(list) (apply-k k (apply list args))]
+      [(car) (apply-k k (if (arg-number car args 1)
+             (car (1st args))))]
+      [(cdr) (apply-k k (if (arg-number cdr args 1)
+             (cdr (1st args))))]
+      [(null?) (apply-k k (if (arg-number null? args 1)
+             (null?(1st args))))]
+      [(assq) (apply-k k (if (arg-number assq args 2)
+             (assq (1st args) (2nd args))))]
+      [(eq?) (apply-k k (if (arg-number eq? args 2)
+             (eq? (1st args) (2nd args))))]
+      [(equal?) (apply-k k (if (arg-number equal? args 2)
+             (equal? (1st args) (2nd args))))]
+      [(atom?) (apply-k k (if (arg-number atom? args 1)
+             (atom? (1st args))))]
+      [(length) (apply-k k (if (arg-number length args 1)
+             (length (1st args))))]
+      [(list->vector) (apply-k k (if (arg-number list->vector args 1)
+             (list->vector (1st args))))]
+      [(list?) (apply-k k (if (arg-number list? args 1)
+             (list? (1st args))))]
+      [(pair?) (apply-k k (if (arg-number pair? args 1)
+             (pair? (1st args))))]
+      [(procedure?) (apply-k k (if (arg-number procedure? args 1)
+             (proc-val? (car args))))]
+      [(vector->list) (apply-k k (if (arg-number vector->list args 1)
+             (vector->list (1st args))))]
+      [(vector) (apply-k k (apply vector args))]
+      [(make-vector) (apply-k k (if (arg-number make-vector args 2)
+             (make-vector (1st args) (2nd args))))]
+      [(vector-ref) (apply-k k (if (arg-number vector-ref args 2)
+             (vector-ref (1st args) (2nd args))))]
+      [(vector?) (apply-k k (if (arg-number vector? args 1)
+             (vector? (1st args))))]
+      [(number?) (apply-k k (if (arg-number number? args 1)
+             (number? (1st args))))]
+      [(symbol?) (apply-k k (if (arg-number symbol? args 1)
+             (symbol? (1st args))))]
+      [(set-car!) (apply-k k (if (arg-number set-car! args 2)
+             (set-car! (1st args) (2nd args))))]
+      [(set-cdr!) (apply-k k (if (arg-number set-cdr! args 2)
+             (set-cdr! (1st args) (2nd args))))]
+      [(vector-set!) (apply-k k (if (arg-number vector-set! args 3)
+             (vector-set! (1st args) (2nd args) (3rd args))))]
+      [(display) (apply-k k (if (arg-number display args 1)
+             (display (1st args))))]
+      [(newline) (apply-k k (if (arg-number newline args 0)
+             (newline)))]
+      [(cadr) (apply-k k (if (arg-number cadr args 1)
+             (cadr (1st args))))]
+      [(caar) (apply-k k (if (arg-number caar args 1)
+             (caar (1st args))))]
+      [(cdar) (apply-k k (if (arg-number cdar args 1)
+             (cdar (1st args))))]
+      [(cddr) (apply-k k (if (arg-number cddr args 1)
+             (cddr (1st args))))]
+      [(caadr) (apply-k k (if (arg-number caadr args 1)
+             (caadr (1st args))))]
+      [(caaar) (apply-k k (if (arg-number caaar args 1)
+             (caaar (1st args))))]
+      [(cadar) (apply-k k (if (arg-number cadar args 1)
+             (cadar (1st args))))]
+      [(caddr) (apply-k k (if (arg-number caddr args 1)
+             (caddr (1st args))))]
+      [(cdadr) (apply-k k (if (arg-number cdadr args 1)
+             (cdadr (1st args))))]
+      [(cdaar) (apply-k k (if (arg-number cdaar args 1)
+             (cdaar (1st args))))]
+      [(cddar) (apply-k k (if (arg-number cddar args 1)
+             (cddar (1st args))))]
+      [(cdddr) (apply-k k (if (arg-number cdddr args 1)
+             (cdddr (1st args))))]
       [(apply)
-             (apply-proc (car args) (cadr args))]
+             (apply-proc (car args) (cadr args) k)]
       [(map) (if (arg-number map args 2)
                (let helper ([proc (car args)] [args (cadr args)] [acc '()])
                  (if (null? args)
-                   (reverse acc)
-                   (helper proc (cdr args)
-                           (cons (apply-proc proc (list (car args)))
-                                 acc)))))]
-      [(eqv?) (if (arg-number eqv? args 2)
-                (eqv? (1st args) (2nd args)))]
-      [(quotient) (if (arg-number quotient args 2)
-                    (quotient (1st args) (2nd args)))]
-      [(set-car!) (if (arg-number set-car! args 2)
-                    (set-car! (1st args) (2nd args)))]
-      [(member) (if (arg-number member args 2)
-                    (member (1st args) (2nd args)))]
+                   (apply-k k (reverse acc))
+                   (apply-proc proc (list (car args)) (lambda (val)
+                                                        (helper proc (cdr args)
+                                                                (cons val acc)))))))]
+      [(eqv?) (apply-k k (if (arg-number eqv? args 2)
+                (eqv? (1st args) (2nd args))))]
+      [(quotient) (apply-k k (if (arg-number quotient args 2)
+                    (quotient (1st args) (2nd args))))]
+      [(set-car!) (apply-k k (if (arg-number set-car! args 2)
+                    (set-car! (1st args) (2nd args))))]
+      [(member) (apply-k k (if (arg-number member args 2)
+                    (member (1st args) (2nd args))))]
       [(append)
-       (apply append args)]
-      [(list-tail) (if (arg-number list-tail args 2)
-                     (list-tail (1st args) (2nd args)))]
+       (apply-k k (apply append args))]
+      [(list-tail) (apply-k k (if (arg-number list-tail args 2)
+                     (list-tail (1st args) (2nd args))))]
       [else (eopl:error 'apply-prim-proc 
             "Bad primitive procedure name: ~s" 
             prim-proc)])))
