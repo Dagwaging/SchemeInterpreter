@@ -624,18 +624,18 @@
 			]
 			[let*-exp (vars bodies)
 		        (if (null? vars)
-		          	(let-exp vars (map syntax-expand bodies))
-		          	(let-exp (list (car vars)) (list (syntax-expand (let*-exp (cdr vars) bodies))))) 
+		          	(syntax-expand (let-exp vars (map syntax-expand bodies)))
+		          	(syntax-expand (let-exp (list (car vars)) (list (syntax-expand (let*-exp (cdr vars) bodies)))))) 
 			]
 			[named-let-exp (name vars bodies)
-				(letrec-exp
-                                  (list (list
-                                          (var-exp name)
-                                          (lambda-exp (map cadar vars)
-                                                      (map syntax-expand bodies))))
-                                  (list (app-exp
-                                          (var-exp name)
-                                          (map syntax-expand (map cadr vars)))))
+				(syntax-expand (letrec-exp
+                                                 (list (list
+                                                         (var-exp name)
+                                                         (lambda-exp (map cadar vars)
+                                                                     (map syntax-expand bodies))))
+                                                 (list (app-exp
+                                                         (var-exp name)
+                                                         (map syntax-expand (map cadr vars))))))
 			]
 			[if-exp (condition if-true if-false) (if-exp (syntax-expand condition) (syntax-expand if-true) (syntax-expand if-false))]
 			[if-exp-void (condition if-true) (if-exp-void (syntax-expand condition) (syntax-expand if-true))]
@@ -645,8 +645,8 @@
 					(lit-exp #f)
 					(if (null? (cdr bodies))
 						(syntax-expand (car bodies))
-                                                (let-exp (list (list (var-exp 'if-exp-result) (syntax-expand (car bodies))))
-                                                         (list (if-exp (var-exp 'if-exp-result) (var-exp 'if-exp-result) (syntax-expand (or-exp (cdr bodies))))))
+                                                (syntax-expand (let-exp (list (list (var-exp 'if-exp-result) (syntax-expand (car bodies))))
+                                                                        (list (if-exp (var-exp 'if-exp-result) (var-exp 'if-exp-result) (syntax-expand (or-exp (cdr bodies)))))))
 					)
 				)
 			]
@@ -655,7 +655,7 @@
 					(lit-exp #t)
 					(if (null? (cdr bodies))
 						(syntax-expand (car bodies))
-						(if-exp (syntax-expand (car bodies)) (syntax-expand (and-exp (cdr bodies))) (syntax-expand (car bodies)))
+						(syntax-expand (if-exp (syntax-expand (car bodies)) (syntax-expand (and-exp (cdr bodies))) (syntax-expand (car bodies))))
 					)
 				)
 			]
@@ -667,23 +667,23 @@
 			]
             [cond-exp (bodies)
                       (if (null? (cdr bodies))
-                        (if-exp-void (if (eqv? 'else (cadaar bodies))
-                                       (lit-exp #t)
-                                       (syntax-expand (caar bodies)))
-                                     (syntax-expand (cadar bodies)))
-                        (if-exp (syntax-expand (caar bodies))
-                                (syntax-expand (cadar bodies))
-                                (syntax-expand (cond-exp (cdr bodies)))))]
+                        (syntax-expand (if-exp-void (if (eqv? 'else (cadaar bodies))
+                                                      (lit-exp #t)
+                                                      (syntax-expand (caar bodies)))
+                                                    (syntax-expand (cadar bodies))))
+                        (syntax-expand (if-exp (syntax-expand (caar bodies))
+                                               (syntax-expand (cadar bodies))
+                                               (syntax-expand (cond-exp (cdr bodies))))))]
             [case-exp (condition bodies)
                       (if (null? (cdr bodies))
-                        (if-exp-void (if (eqv? 'else (cadaar bodies))
-                                       (lit-exp #t)
-                                       (app-exp (var-exp (if (list? (caar bodies)) 'member 'eqv?)) (list (syntax-expand condition) (caar bodies))))
-                                       (syntax-expand (begin-exp (cadar bodies))))
-                        (if-exp
-                          (app-exp (var-exp (if (list? (caar bodies)) 'member 'eqv?)) (list (syntax-expand condition) (caar bodies)))
-                          (syntax-expand (begin-exp (cadar bodies)))
-                          (syntax-expand (case-exp condition (cdr bodies)))))]
+                        (syntax-expand (if-exp-void (if (eqv? 'else (cadaar bodies))
+                                                      (lit-exp #t)
+                                                      (app-exp (var-exp (if (list? (caar bodies)) 'member 'eqv?)) (list (syntax-expand condition) (caar bodies))))
+                                                    (syntax-expand (begin-exp (cadar bodies)))))
+                        (syntax-expand (if-exp
+                                         (app-exp (var-exp (if (list? (caar bodies)) 'member 'eqv?)) (list (syntax-expand condition) (caar bodies)))
+                                         (syntax-expand (begin-exp (cadar bodies)))
+                                         (syntax-expand (case-exp condition (cdr bodies))))))]
             [begin-exp (bodies)
                        (if (null? bodies)
                          (lit-exp (void))
@@ -742,9 +742,6 @@
       [letrec-exp (vars bodies)
                   (extend-env-recursively vars env (lambda (env)
                                                      (eval-bodies bodies env k)))]
-      [let-exp (vars bodies)
-               (eval-rands (map cadr vars) env (lambda (rands)
-                                                 (eval-bodies bodies (extend-env (map cadar vars) (apply vector rands) env) k)))]
       [lambda-exp (ids bodies)
                   (cond
                     [(list? ids)
