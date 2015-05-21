@@ -55,6 +55,8 @@
 ; kind of procedure, but more kinds will be added later.
 
 (define-datatype proc-val proc-val?
+  [continuation-proc
+    (k continuation?)]
   [prim-proc
    (name symbol?)]
   [closure
@@ -916,6 +918,8 @@
 (define apply-proc
   (lambda (proc-value args k)
     (cases proc-val proc-value
+      [continuation-proc (new-k)
+                         (apply-k new-k (car args))]
       [prim-proc (op) (apply-prim-proc op args k)]
 			; You will add other cases
       [closure (ids bodies env)
