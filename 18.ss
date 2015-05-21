@@ -749,9 +749,7 @@
                  [bodies-k (bodies (list-of expression?))
                            (env environment?)
                            (k continuation?)]
-                 [helper-k (proc procedure?)
-                           (args list?)]
-                 [map-helper-k (proc proc-val?)
+                 [map-helper-k (proc procedure?)
                                (l list?)
                                (k continuation?)]
                  [cons-k (l list?)
@@ -795,13 +793,9 @@
                    (apply-k k (set-cdr! vars (vector-append (cdr vars) val)))]
          [bodies-k (bodies env k)
                    (eval-bodies bodies env k)]
-         [helper-k (proc args)
-                   (apply proc args)]
          [map-helper-k (proc l k)
-                       (if (null? l)
-                         (apply-k k (reverse val))
-                         (apply-proc proc (list (car l))
-                                     (cons-k val (map-helper-k proc (cdr l) k))))]
+                       (proc (car l)
+                             (cons-k val k))]
          [cons-k (l k)
                    (apply-k k (cons val l))]
          [extend-env-k (new-vals pos vals proc)
@@ -881,11 +875,10 @@
     (apply vector (append (vector->list v) args)))
 
 (define (map-k proc-k l k)
-  (let helper ([l l] [acc '()])
-    (if (null? l)
-      (apply-k k (reverse acc))
-      (proc-k (car l) (lambda (r)
-                        (helper (cdr l) (cons r acc)))))))
+  (if (null? l)
+    (apply-k k l)
+    (map-k proc-k (cdr l)
+           (map-helper-k proc-k l k))))
 
 (define (reset-global-env)
   (set! init-env (extend-env (list) (vector) (empty-env))))
@@ -904,7 +897,7 @@
 
 (define eval-rands
   (lambda (rands env k)
-    (apply-k k (map (lambda (x) (eval-exp x env (identity-k))) rands))))
+    (map-k (lambda (x k) (eval-exp x env k)) rands k)))
 
 (define (eval-bodies bodies env k)
   (if (null? (cdr bodies))
@@ -1065,7 +1058,7 @@
       [(apply)
              (apply-proc (car args) (cadr args) k)]
       [(map) (if (arg-number map args 2)
-               (apply-k (map-helper-k (car args) (cadr args) k) '()))]
+               (map-k (lambda (x k) (apply-proc (car args) (list x) k)) (cadr args) k))]
       [(eqv?) (apply-k k (if (arg-number eqv? args 2)
                 (eqv? (1st args) (2nd args))))]
       [(quotient) (apply-k k (if (arg-number quotient args 2)
